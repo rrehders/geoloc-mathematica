@@ -41,31 +41,70 @@ api[address_String] :=
 	]
 
 
-(* If ScriptCommandline is completely blank, the script is being debugged in Mathematica *)
+(* Transfer Command line args to script variable *)
+args = $ScriptCommandLine;
+
+
+(* If $ScriptCommandLine is completely blank, the script/notebook is being debugged in Mathematica *)
 If[Length[$ScriptCommandLine]==0,
+	args={"plotaddress"};
 	(* Set up a debug Command Line *)
-	args={"geoloc", NotebookDirectory[]<>"test/address.csv"};,
-	args=$ScriptCommandLine;
+	(* AppendTo[args,NotebookDirectory[]<>"test/address1.csv"]; *)
+	(* AppendTo[args,NotebookDirectory[]<>"test/address2.csv"]; *)
+	(* AppendTo[args,"colour={Blue,Green}"]; *)
+	(* AppendTo[args,"legend={Personal,Work}"]; *)
+	(* AppendTo[args,NotebookDirectory[]<>"test/address.csv"]; *)
+,
+	Nothing
 ]
 
-(* Parse command line *)
-ifile = First[Rest[args]];
+
+If[Length[args]==1,
+	Print["USAGE: geoloc file1 [file2...]"]
+	Exit[]
+,
+	Nothing
+]
+
+(* Parse the command line *)
+flist = {};
+AppendTo[flist,#]& /@ Rest[args];
+Print["Command Line Parsed"]
 
 
 (* Define function to read input addresses *)
-readaddr[ifile_] :=
-	Switch[FileExtension[ifile],
-		"csv",Import[ifile],
-		"xls",Import[ifile,{"data",1}],
-		"xlsx",Import[ifile,{"data",1}]
-	]
+readaddr[ifile_] := 
+Switch[FileExtension[ifile],
+	"csv",Import[ifile],
+	"xls",Import[ifile,{"data",1}],
+	"xlsx",Import[ifile,{"data",1}],
+	_,Nothing
+]
 
-(* Read file specified in the command line *)
-tblInput = readaddr[ifile];
+(* Read files from the command line *)
+tblInput = readaddr /@ flist;
+
+
+If[MemberQ[tblInput,$Failed],
+	Print["One or more files specified do not exist"];
+	Exit[1]
+,
+	Print["Input files Read"]
+]
+
+
+
+(* For each file information, test for a 7 column array *)
+(* includes some GeoPos Info *)
+
+(* Add empty columns to arrays which are address only *)
 
 
 (* Define Function to geolocate adress list *)
-geoloc[input_] := Module[{colAddresses, colLocations, tmp},
+geoloc[input_] := Module[{colAddresses, colLocations, withpos, nopos, tmp},
+	(* seperate the list into tables of rows with geoposition and those without *)
+	
+
 	(* Merge address components into a single string *)
 	colAddresses = StringJoin[Riffle[#, " "]] & /@ input;
 	(* Geolocate the address on Google *)
@@ -76,12 +115,13 @@ geoloc[input_] := Module[{colAddresses, colLocations, tmp},
 	tmp = Append[tmp, Last@# & /@ colLocations];
 	(* Flip the table back to restore columnar format *)
 	tmp = Transpose[tmp];
-	(* Filter out any addresses not located *)
-	Select[tmp,NumberQ[#[[6]]]&]
 ]
 
 (* Geolocate Addresses from Google Maps *)
 tblLoc = geoloc /@ tblInput;
+Print["Address lookup from Google Complete"]
 
 
+(* Save Updated Information *)
 
+Print["Files updated"]
