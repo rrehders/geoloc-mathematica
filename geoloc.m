@@ -49,8 +49,8 @@ args = $ScriptCommandLine;
 If[Length[$ScriptCommandLine]==0,
 	args={"plotaddress"};
 	(* Set up a debug Command Line *)
-	(* AppendTo[args,NotebookDirectory[]<>"test/address1.csv"]; *)
-	(* AppendTo[args,NotebookDirectory[]<>"test/address2.csv"]; *)
+	AppendTo[args,NotebookDirectory[]<>"test/address1.csv"];
+	AppendTo[args,NotebookDirectory[]<>"test/address2.csv"];
 	(* AppendTo[args,"colour={Blue,Green}"]; *)
 	(* AppendTo[args,"legend={Personal,Work}"]; *)
 	(* AppendTo[args,NotebookDirectory[]<>"test/address.csv"]; *)
@@ -63,17 +63,17 @@ If[Length[args]==1,
 	Print["USAGE: geoloc file1 [file2...]"]
 	Exit[]
 ,
-	Nothing
+	Nothing;
 ]
 
 (* Parse the command line *)
-flist = {};
+flist={};
 AppendTo[flist,#]& /@ Rest[args];
 Print["Command Line Parsed"]
 
 
 (* Define function to read input addresses *)
-readaddr[ifile_] := 
+doReadAddr[ifile_] := 
 Switch[FileExtension[ifile],
 	"csv",Import[ifile],
 	"xls",Import[ifile,{"data",1}],
@@ -82,7 +82,7 @@ Switch[FileExtension[ifile],
 ]
 
 (* Read files from the command line *)
-tblInput = readaddr /@ flist;
+tblInput = doReadAddr /@ flist;
 
 
 If[MemberQ[tblInput,$Failed],
@@ -94,34 +94,32 @@ If[MemberQ[tblInput,$Failed],
 
 
 
-(* For each file information, test for a 7 column array *)
-(* includes some GeoPos Info *)
-
-(* Add empty columns to arrays which are address only *)
-
-
 (* Define Function to geolocate adress list *)
-geoloc[input_] := Module[{colAddresses, colLocations, withpos, nopos, tmp},
+doGeoLookup[input_] := Module[{colAddresses, colLocations, tmp, hold, lookup},
+	(* Split file into records that need geolocation andd those that dont *)
+	(* Assum that if the record is 7 elements long it has geoloc information *)
+	hold = Select[input, Length[#] > 5 &];
+	lookup = Select[input, Length[#] <= 5 &];
 	(* seperate the list into tables of rows with geoposition and those without *)
-	
-
 	(* Merge address components into a single string *)
-	colAddresses = StringJoin[Riffle[#, " "]] & /@ input;
+	colAddresses = StringJoin[Riffle[#, " "]] & /@ lookup;
 	(* Geolocate the address on Google *)
 	colLocations = api[#] & /@ colAddresses;
 	(* flip the table to add the latitude and longitude as rows *)
-	tmp = Transpose[input];
+	tmp = Transpose[lookup];
 	tmp = Append[tmp, First@# & /@ colLocations]; 
 	tmp = Append[tmp, Last@# & /@ colLocations];
 	(* Flip the table back to restore columnar format *)
 	tmp = Transpose[tmp];
+	tmp \[Union] hold
 ]
 
 (* Geolocate Addresses from Google Maps *)
-tblLoc = geoloc /@ tblInput;
+
+tblOutput = doGeoLookup[#]& /@ tblInput;
 Print["Address lookup from Google Complete"]
 
 
 (* Save Updated Information *)
-
+MapThread[Export,{flist,tblOutput}];
 Print["Files updated"]
